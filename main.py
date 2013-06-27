@@ -34,13 +34,18 @@ import ctypes
 import libtcodpy as libtcod
 import random
 import time
+import yaml
 
 inst = lambda a:a()
 @inst
 class Settings:
-	SCREEN_WIDTH = 37
+	def __init__(self):
+		with file('settings.yaml') as f:
+			self.__dict__ = yaml.safe_load(f)
+
+	SCREEN_WIDTH = 75
 	SCREEN_HEIGHT = 20
-	DISPLAY_HEIGHT = SCREEN_HEIGHT+2
+	DISPLAY_HEIGHT = property(lambda self: self.SCREEN_HEIGHT+2)
 	LIMIT_FPS = 20
 	BASE = 8
 	LEVELS = 3
@@ -191,7 +196,7 @@ while not libtcod.console_is_window_closed():
 			bgcolor = lm.get_color(level, x+offset_x, y+offset_y, bgcolor)
 
 			if (x,y) == player_screen_pos:
-				#color = libtcod.Color(128,128,128)
+				color = libtcod.Color(128,128,100)
 				char = '\x01'
 
 
