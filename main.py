@@ -38,15 +38,15 @@ import time
 inst = lambda a:a()
 @inst
 class Settings:
-	SCREEN_WIDTH = 75
-	SCREEN_HEIGHT = 40
+	SCREEN_WIDTH = 37
+	SCREEN_HEIGHT = 20
 	DISPLAY_HEIGHT = SCREEN_HEIGHT+2
 	LIMIT_FPS = 20
 	BASE = 8
 	LEVELS = 3
 
 libtcod.console_init_root(Settings.SCREEN_WIDTH, Settings.DISPLAY_HEIGHT, 'Mapping', False)
-libtcod.console_set_custom_font("terminal.png",libtcod.FONT_LAYOUT_ASCII_INROW)
+libtcod.console_set_custom_font("terminal.png",libtcod.FONT_LAYOUT_ASCII_INROW|libtcod.FONT_TYPE_GREYSCALE)
 #libtcod.console_set_fullscreen(True)
 con = libtcod.console_new(Settings.SCREEN_WIDTH, Settings.SCREEN_HEIGHT)
 blank = libtcod.console_new(Settings.SCREEN_WIDTH, Settings.SCREEN_HEIGHT)
@@ -55,7 +55,7 @@ blank = libtcod.console_new(Settings.SCREEN_WIDTH, Settings.SCREEN_HEIGHT)
 
 
 message_con = libtcod.console_new(Settings.SCREEN_WIDTH, 2)
-#libtcod.console_set_default_background(message_con,libtcod.red)
+libtcod.console_set_default_background(message_con,libtcod.red)
 #libtcod.console_set_default_background(blank,libtcod.red)
 
 
@@ -68,13 +68,13 @@ mapping = {}
 
 colors = {
 	':': colorsys.rgb_to_hsv(0.0,0.0,1.0),
-	chr(241): colorsys.rgb_to_hsv(0.0,1.0,0.0),
+	chr(5): colorsys.rgb_to_hsv(0.0,0.5,0.0),
 	'*': colorsys.rgb_to_hsv(1.0,1.0,0.0),
 }
 
 df = 1/40.0
 for x in range(-20,20):
-	char = random.choice(['.','.','.','*','*',';',':','"',"'",chr(241),'`'])
+	char = random.choice(['.','.','.','*','*',';',':','"',"'",chr(5),'`'])
 	if char in colors:
 		h,s,v = colors[char]
 		print s,v
@@ -96,7 +96,7 @@ names = {
 	':': ('pond',True,True),
 	'"': ('heath',True,False),
 	"'": ('marsh',1-0.15,False),
-	chr(241): ('forest',False,True),
+	chr(5): ('forest',False,True),
 	'`': ('copse',1-0.5,False),
 }
 
@@ -131,7 +131,7 @@ class LevelMap(object):
 
 	def get_color(self, level,x,y, color):
 		fovmap = self.get_fovmap(level)
-		if libtcod.map_is_in_fov(fovmap, x,y):
+		if libtcod.map_is_in_fov(fovmap, x,y) and libtcod.map_is_walkable(fovmap,x,y):
 			#print 'cell in fov', level,x,y, libtcod.map_get_width(fovmap), libtcod.map_get_height(fovmap)
 			color = [x/255 for x in color]
 			h,s,v = colorsys.rgb_to_hsv(*color)
@@ -156,6 +156,7 @@ lm.calculate_level(level)
 libtcod.console_set_default_foreground(message_con, libtcod.white)
 for c in [con,message_con]:
 	libtcod.console_set_default_foreground(c, libtcod.white)
+	libtcod.console_clear(c)
 
 offset_x, offset_y = 0,0
 MAP_Y,MAP_X = len(mp.data[level]), len(mp.data[level][0])
@@ -167,11 +168,11 @@ ak=0
 while not libtcod.console_is_window_closed():
 	t0 = time.time()
 
-	if player_x - offset_x >= Settings.SCREEN_WIDTH-10: offset_x += 20
-	elif player_x - offset_x < 10: offset_x -= 20
+	if player_x - offset_x >= Settings.SCREEN_WIDTH-5: offset_x += 5
+	elif player_x - offset_x < 5: offset_x -= 5
 
-	if player_y - offset_y >= Settings.SCREEN_HEIGHT-10: offset_y += 20
-	elif player_y - offset_y < 10: offset_y -= 20
+	if player_y - offset_y >= Settings.SCREEN_HEIGHT-5: offset_y += 5
+	elif player_y - offset_y < 5: offset_y -= 5
 
 	offset_y = min(offset_y,MAP_Y-Settings.SCREEN_HEIGHT)
 	offset_y = max(offset_y,0)
@@ -181,6 +182,7 @@ while not libtcod.console_is_window_closed():
 
 	t1 = time.time()
 	lm.comp_fov(level, player_x, player_y,10)
+	player_screen_pos = player_x-offset_x,player_y-offset_y
 	for y,row in enumerate(mp.data[level][offset_y:offset_y+Settings.SCREEN_HEIGHT]):
 		for x,cell in enumerate(row[offset_x:offset_x+Settings.SCREEN_WIDTH]):
 			color,char,bgcolor = mapping.get(cell, (libtcod.Color(0,0,0),' ',libtcod.Color(0,0,0)))
@@ -188,14 +190,16 @@ while not libtcod.console_is_window_closed():
 			color = lm.get_color(level, x+offset_x, y+offset_y, color)
 			bgcolor = lm.get_color(level, x+offset_x, y+offset_y, bgcolor)
 
+			if (x,y) == player_screen_pos:
+				#color = libtcod.Color(128,128,128)
+				char = '\x01'
+
+
 			libtcod.console_set_char_foreground(con, x,y, color)
 			libtcod.console_set_char_background(con, x,y, bgcolor)
 			libtcod.console_set_char(con,x,y,char)
 
 	print 'draw loop:', time.time()-t1
-
-	libtcod.console_set_char_foreground(con, player_x-offset_x,player_y-offset_y, libtcod.white)
-	libtcod.console_set_char(con,player_x-offset_x,player_y-offset_y,'\x01')
 
 	libtcod.console_print(message_con, 0,1,lm.get_tile_type(level, player_x,player_y)[0])
 	libtcod.console_blit(message_con, 0,0, Settings.SCREEN_WIDTH,2, 0, 0,Settings.DISPLAY_HEIGHT-2)
@@ -261,7 +265,7 @@ while not libtcod.console_is_window_closed():
 		nx,ny = libtcod.line_step()
 		while None not in {nx,ny}:
 			if not lm.get_walkable(level,nx,ny):
-				libtcod.console_print(message_con, 0,0,'You can\'t walk through a %s' % lm.get_tile_type(level, nx,ny)[0])
+				libtcod.console_print(message_con, 0,0,'You cannot walk through a %s' % lm.get_tile_type(level, nx,ny)[0])
 				break
 			print nx,ny
 			player_x,player_y = nx,ny
