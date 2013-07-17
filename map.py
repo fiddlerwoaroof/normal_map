@@ -1,21 +1,22 @@
+
 # Copyright (c) 2013 Edward Langley
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
 # are met:
-# 
+#
 # Redistributions of source code must retain the above copyright notice,
 # this list of conditions and the following disclaimer.
-# 
+#
 # Redistributions in binary form must reproduce the above copyright
 # notice, this list of conditions and the following disclaimer in the
 # documentation and/or other materials provided with the distribution.
-# 
+#
 # Neither the name of the project's author nor the names of its
 # contributors may be used to endorse or promote products derived from
 # this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -29,6 +30,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division
+import collections
 import random
 import numpy
 
@@ -62,23 +64,83 @@ P2
 %(data)s
 """
 
+class MapData(collections.MutableMapping):
+	def __init__(self, data, base=9):
+		self.data = data
+		self.base = base
+		self.below = [[None for __ in range(base)] for ___ in range(base)]
+
+	@classmethod
+	def rand_new(cls, mean, base=9):
+		data = numpy.random.normal(mean, max(mean/4,1), (base,base)).astype(int)
+		return cls(data,base)
+
+	def get_cell(self, x,y, depth=1):
+		cur = self
+		if depth > 1:
+			below = self.get_below(x,y)
+			depth -= 1
+			while depth > 1:
+				below = below.get_below(0,0)
+				depth -= 1
+			cur = below
+		return cur.data[y,x]
+
+	def get_below(self, x,y):
+		below = self.below[y][x]
+		if below is None:
+			mean = self.get_cell(x,y)
+			below = self.below[y][x] = self.rand_new(mean,self.base)
+		return below
+
+	def get_all_below(self):
+		for y, lis in enumerate(self.below):
+			for x, val in enumerate(lis):
+				if val is not None: continue
+				self.get_below(x,y)
+		return numpy.concatenate([numpy.concatenate([x.data for x in l],1) for l in self.below])
+
+	def get_rect_below(self, x,y, w,h):
+		tw = w/self.base
+		tw = int(numpy.ceil(tw))
+		th = h/self.base
+		th = int(numpy.ceil(th))
+		out = []
+		for ny  in range(y,min(len(self.data),y+th)):
+			out.append([])
+			for nx in range(x,min(len(self.data[0]),x+tw)):
+				out[-1].append(self.get_below(nx,ny))
+
+		return numpy.concatenate([numpy.concatenate([x.data for x in l],1) for l in out])[:h,:w]
+
+	def __getitem__(self, key):
+		return self.data.__getitem__(key)
+	def __delitem__(self, key):
+		self.data.__setitem__(key, 0.0)
+	def __len__(self):
+		return len(self.data)
+	def __setitem__(self, key, value):
+		self.data.__setitem__(key, value)
+	def __iter__(self):
+		return iter(self.data)
+
+
 class Map(object):
 	def __init__(self, data, depth, base=9):
 		self.data = data
 		self.depth = depth
 		self.base = base
+
 	@classmethod
 	def rand_new(cls, depth,base=9):
-		data = [numpy.random.random_integers(0,10,(1,1))]
-		for x in range(1,depth+1):
-			global out
-			out = numpy.zeros((base**x, base**x),'int')
-			for r, row in enumerate(data[-1]):
-				for c, col in enumerate(row):
-					new = numpy.random.normal(col,max(col/4,1),(base,base)).astype(int)
-					out[r*base:r*base+base,c*base:c*base+base] = new
-			data.append(out)
+		data = MapData.rand_new(numpy.random.randint(0,10),base)
 		return cls(data,depth)
+
+	def get_level(self, level):
+		cur = self.data
+		for idx in range(1, level):
+			cur = cur.get_below(0,0)
+		return cur.get_rect_below(0,0, self.base**level, self.base**level)
 
 	def to_pgm(self,level):
 		level = self.data[level].copy()

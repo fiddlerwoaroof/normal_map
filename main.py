@@ -111,12 +111,13 @@ class LevelMap(object):
 		self.fovmaps = [None]
 
 	def get_tile_type(self, level,x,y):
-		tile_val = mapping.get(self.map.data[level][y][x],(None,' '))[1]
+		lvl = self.map.get_level(level)
+		tile_val = mapping.get(lvl[y][x],(None,' '))[1]
 		return names.get(tile_val,('',True,True))
 
 	def get_fovmap(self,level):
 		if level >= len(self.fovmaps):
-			levelmap = self.map.data[level]
+			levelmap = mp.get_level(level)
 			self.fovmaps.append(libtcod.map_new(len(levelmap), len(levelmap[0])))
 			libtcod.map_clear(self.fovmaps[-1])
 		return self.fovmaps[level]
@@ -151,7 +152,8 @@ class LevelMap(object):
 	def calculate_level(self, level):
 		if not self.has_level(level):
 			print 'calculate_level'
-			for y,row in enumerate(mp.data[level]):
+			lvl = mp.get_level(level)
+			for y,row in enumerate(lvl):
 				for x,__ in enumerate(row):
 					lm.adj_map(level, x,y)
 
@@ -164,7 +166,8 @@ for c in [con,message_con]:
 	libtcod.console_clear(c)
 
 offset_x, offset_y = 0,0
-MAP_Y,MAP_X = len(mp.data[level]), len(mp.data[level][0])
+levelmap = mp.get_level(level)
+MAP_Y,MAP_X = len(levelmap), len(levelmap[0])
 player_x, player_y = random.randrange(0,MAP_X),random.randrange(0,MAP_Y)
 if not lm.get_walkable(level,player_x,player_y):
 	player_x,player_y = [(x,y) for x in range(player_x-2,player_x+3) for y in range(player_y-2,player_y+3) if lm.get_walkable(level,x,y)][-1]
@@ -188,7 +191,7 @@ while not libtcod.console_is_window_closed():
 	t1 = time.time()
 	lm.comp_fov(level, player_x, player_y,10)
 	player_screen_pos = player_x-offset_x,player_y-offset_y
-	for y,row in enumerate(mp.data[level][offset_y:offset_y+Settings.SCREEN_HEIGHT]):
+	for y,row in enumerate(levelmap[offset_y:offset_y+Settings.SCREEN_HEIGHT]):
 		for x,cell in enumerate(row[offset_x:offset_x+Settings.SCREEN_WIDTH]):
 			color,char,bgcolor = mapping.get(cell, (libtcod.Color(0,0,0),' ',libtcod.Color(0,0,0)))
 
@@ -279,7 +282,8 @@ while not libtcod.console_is_window_closed():
 	else:
 		player_prop = player_x/MAP_X, player_y/MAP_Y
 		offset_prop = offset_x/MAP_X, offset_y/MAP_Y
-		MAP_Y,MAP_X = len(mp.data[level]), len(mp.data[level][0])
+		levelmap = mp.get_level(level)
+		MAP_Y,MAP_X = len(levelmap), len(levelmap[0])
 		libtcod.console_clear(0)
 		libtcod.console_clear(con)
 
