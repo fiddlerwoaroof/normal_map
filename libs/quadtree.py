@@ -9,132 +9,156 @@ import collections
 #  (0,3)  (1,3) | (2,3) (3,3)
 #
 
-class XY(collections.namedtuple('XY', 'x y')):
-	def __add__(self, other):
-		dx, dy = other
-		return XY(self.x+dx, self.y+dy)
-	def __sub__(self, other):
-		dx, dy = other
-		return XY(self.x-dx, self.y-dy)
-	def __div__(self, n):
-		return XY(self.x/n, self.y/n)
-	def __mul__(self, n):
-		return XY(self.x*n, self.y*n)
-	def __abs__(self):
-		return XY(abs(self.x), abs(self.y))
-
-class AABB(collections.namedtuple('AABB', 'center halfDimension')):
+class Rect(object):
 	@property
-	def tl(self):
-		return self.center - self.halfDimension
+	def width(self): return self.size[0]
 	@property
-	def br(self):
-		return self.center + self.halfDimension
+	def height(self): return self.size[1]
+
 	@property
-	def tr(self):
-		return XY(self.br[0], self.tl[1])
+	def x(self): return self.pos[0]
 	@property
-	def bl(self):
-		return XY(self.tl[0], self.br[1])
-	def containsPoint(self, p):
-		tl = self.center - self.halfDimension
-		br = (self.center + self.halfDimension) - (1,1)
-		return all(x >= 0 for x in p - tl) and all(x > 0 for x in br - p)
+	def y(self): return self.pos[1]
 
-	def intersectsAABB(self, other):
-		tl = self.center - self.halfDimension
-		br = self.center + self.halfDimension
-		tr = XY(br[0], tl[1])
-		bl = XY(tl[0], br[1])
-		return other.containsPoint(tl) or other.containsPoint(br) or other.containsPoint(tr) or other.containsPoint(bl)
+	@classmethod
+	def random_rect(cls, xrange, yrange, dimrange):
+		x = random.randrange(*xrange)
+		y = random.randrange(*yrange)
+		size = map(lambda x: random.randrange(*x), dimrange)
+		return cls(x,y, *size)
 
+	def __repr__(self):
+		return 'Rect(%d, %d, %d, %d)' % (self.pos + self.size)
 
-	def subdivide(self):
-		tl = self.center - self.halfDimension
-		br = self.center + self.halfDimension
-		tr = XY(br[0], tl[1])
-		bl = XY(tl[0], br[1])
+	def fill(self, array, value):
+		x,y = self.pos
+		w,h = self.size
+		array[x:x+w,y:y+h] = value
 
-		center = self.center
-		ne = AABB( (tl+center)/2, self.halfDimension/2 )
-		nw = AABB( (tr+center)/2, self.halfDimension/2 )
-		se = AABB( (br+center)/2, self.halfDimension/2 )
-		sw = AABB( (bl+center)/2, self.halfDimension/2 )
-		return nw, ne, se, sw
+	def __init__(self, x,y, w,h):
+		self.pos = (x,y)
+		self.size = (w,h)
 
 class QuadTree(object):
-	QT_NODE_CAPACITY = 4
+	MAX_OBJECTS = 10
+	MAX_LEVELS = 8
 
-	def __init__(self, boundary):
-		self.boundary = boundary
-		self.nw = None
-		self.ne = None
-		self.se = None
-		self.sw = None
-		self.points = []
+	def __init__(self, pLevel, pBounds):
+		self.level = pLevel
+		self.objects = []
+		self.bounds = pBounds
+		self.nodes = [None, None, None, None]
 
-	def insert(self, p):
-		if not self.boundary.containsPoint(p): return False
+	def clear(self):
+		del self.objects[:]
+		for idx,node in enumerate(self.nodes):
+			if node is not None:
+				node.clear()
+				self.nodes[idx] = None
 
-		if len(self.points) < self.QT_NODE_CAPACITY:
-			self.points.append(p)
-			return True
+	def split(self):
+		subWidth = self.bounds.size[0] / 2
+		subHeight = self.bounds.size[1] / 2
+		x, y = self.bounds.pos
 
-		if self.nw is None:
-			self.nw, self.ne, self.se, self.sw = map(self.__class__, self.boundary.subdivide())
-			while self.points:
-				point = self.points.pop()
-				if self.nw.insert(point): pass
-				elif self.ne.insert(point): pass
-				elif self.se.insert(point): pass
-				elif self.sw.insert(point): pass
+		self.nodes[0] = QuadTree(self.level+1, Rect(x+subWidth, y, subWidth, subHeight))
+		self.nodes[1] = QuadTree(self.level+1, Rect(x, y, subWidth, subHeight))
+		self.nodes[2] = QuadTree(self.level+1, Rect(x, y + subHeight, subWidth, subHeight))
+		self.nodes[3] = QuadTree(self.level+1, Rect(x + subWidth, y + subHeight, subWidth, subHeight))
 
-		elif self.nw.insert(p): return True
-		elif self.ne.insert(p): return True
-		elif self.se.insert(p): return True
-		elif self.sw.insert(p): return True
+	def getIndex(self, rect):
+		index = -1
+		verticalMidpoint = self.bounds.x + self.bounds.width/2
+		horizontalMidpoint = self.bounds.y + self.bounds.width/2
+		topquad = rect.y < horizontalMidpoint and rect.y + rect.height < horizontalMidpoint
+		bottomquad = rect.y > horizontalMidpoint
 
-		return False
+		if rect.x < verticalMidpoint and rect.x + rect.width < verticalMidpoint:
+			if topquad:
+				index = 1
+			elif bottomquad:
+				index = 2
+		elif rect.x > verticalMidpoint:
+			if topquad:
+				index = 0
+			elif bottomquad:
+				index = 3
 
-	def query(self, range):
-		pointsInRange = []
+		return index
 
-		if not self.boundary.intersectsAABB(range):
-			return pointsInRange
+	def insert(self, rect):
+		if self.nodes[0] is not None:
+			index = self.getIndex(rect)
+			if index != -1:
+				self.nodes[index].insert(rect)
+				return
 
-		for p in self.points:
-			if range.containsPoint(p):
-				pointsInRange.append(p)
+		self.objects.append(rect)
 
-		if self.nw is None: return pointsInRange
+		if len(self.objects) > self.MAX_OBJECTS and self.level < self.MAX_LEVELS:
+			if self.nodes[0] is None:
+				self.split()
 
-		pointsInRange.extend(self.nw.query(range))
-		pointsInRange.extend(self.ne.query(range))
-		pointsInRange.extend(self.se.query(range))
-		pointsInRange.extend(self.sw.query(range))
+			i = 0
+			while i < len(self.objects):
+				index = self.getIndex(self.objects[i])
+				if index != -1:
+					self.nodes[index].insert(self.objects.pop(i))
+				else:
+					i += 1
 
-		return pointsInRange
+	def retrieve(self, rect):
+		result = []
+		index = self.getIndex(rect)
+		if index != -1 and self.nodes[0] is not None:
+			result.extend(self.nodes[index].retrieve(rect))
 
-	def visualize(self):
-		points = self.query(self.boundary)
-		import numpy
-		out = numpy.zeros(self.boundary.halfDimension * 2).astype('int')
-		for p in points:
-			out[p] = 1
+		result.extend(self.objects)
+		return result
 
-		for row in out:
-			for cell in row:
-				if cell == 1: print('#',end='')
-				elif cell == 0: print(' ',end='')
-			print()
+	def locate_rect(self, rect):
+		cur = self
+		index = cur.getIndex(rect)
 
-a = QuadTree(AABB(XY(128,128), XY(128,128)))
+		while index != -1:
+			yield index
+			cur = self.nodes[index]
+
+
+
+
 import random
-for x in range(128):
-	for y in range(128):
-		if not a.insert(XY(x,y)):
-			pass #print (x,y)
-#points = {XY(random.randrange(128),random.randrange(128)) for ___ in range(300)}
-#for p in points:
-	#a.insert(p)
-#a.visualize()
+
+objects = {Rect.random_rect( (1,37), (1,200), ( (2,10), (2,10) ) ) for ___ in range(50)}
+quad = QuadTree(0, Rect(0,0, 48,211))
+quad.clear()
+for obj in objects:
+	quad.insert(obj)
+
+collided = set()
+oot = set()
+
+for obj in objects:
+	out = quad.retrieve(obj)
+
+	if obj in collided: continue
+	oot.add(obj)
+
+	for col in out:
+		collided.add(col)
+		print(obj, 'collides with', col)
+	else:
+		print('---')
+
+
+import numpy
+field = numpy.zeros( (48,211) )
+for obj in objects:
+	obj.fill(field, 2)
+for obj in oot:
+	obj.fill(field, 1)
+
+for row in field:
+	for cell in row:
+		print('%d' % cell, end='')
+	print()

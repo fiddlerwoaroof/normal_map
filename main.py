@@ -40,8 +40,10 @@ inst = lambda a:a()
 @inst
 class Settings:
 	def __init__(self):
-		with file('settings.yaml') as f:
-			self.__dict__ = yaml.safe_load(f)
+		with file('data/settings.yaml') as f:
+			self.settings = yaml.safe_load(f)
+	def __getattr__(self, attr):
+		return self.settings[attr]
 
 	SCREEN_WIDTH = 75
 	SCREEN_HEIGHT = 20
@@ -156,6 +158,8 @@ class LevelMap(object):
 			for y,row in enumerate(lvl):
 				for x,__ in enumerate(row):
 					lm.adj_map(level, x,y)
+
+
 
 lm = LevelMap(mp)
 lm.calculate_level(level)
