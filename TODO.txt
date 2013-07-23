@@ -1,0 +1,3 @@
+# TODO:
+
+- BUG: player position is written to the screen in screen units rather than in console units . . . 
