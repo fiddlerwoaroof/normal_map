@@ -262,7 +262,7 @@ while not libtcod.console_is_window_closed():
 		dest_x -= diff
 		if alt:
 			dest_y -= diff
-	elif key.vk == libtcod.KEY_ESCAPE and any([key.lalt,key.ralt]): break
+	elif key.vk == libtcod.KEY_ESCAPE and any([key.lctrl,key.rctrl]): break
 	elif key.c == ord('>') and level < mp.depth: level += 1
 	elif key.c == ord('<') and level > 1: level -= 1
 
